@@ -6,6 +6,7 @@ cache:
 
 before_script:
   - apk add git --update
+  - apk --no-cache add php-mcrypt
 
 stages:
   - test
