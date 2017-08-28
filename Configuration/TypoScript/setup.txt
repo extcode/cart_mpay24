@@ -1,0 +1,10 @@
+plugin.tx_cartmpay24 {
+    test = 1
+
+    merchantId =
+    soapPassword =
+
+    skipInvoice = 1
+    preventEmailToSender = 0
+    preventEmailToReceiver = 0
+}
