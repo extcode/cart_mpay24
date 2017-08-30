@@ -2,235 +2,193 @@
 
 namespace Extcode\CartMpay24\Utility;
 
-/**
- * This file is part of the TYPO3 CMS project.
- *
- * It is free software; you can redistribute it and/or modify it under
- * the terms of the GNU General Public License, either version 2
- * of the License, or any later version.
- *
- * For the full copyright and license information, please read the
- * LICENSE.txt file that was distributed with this source code.
- *
- * The TYPO3 project - inspiring people to share!
- */
-
-use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
-
-@include 'phar://' . ExtensionManagementUtility::extPath('cart_mpay24') . 'Libraries/mpay24-mpay24-php.phar/vendor/autoload.php';
-
+use Extcode\Cart\Domain\Repository\CartRepository;
 use Mpay24\Mpay24;
 use Mpay24\Mpay24Order;
-use TYPO3\CMS\Extbase\Utility\DebuggerUtility;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\Configuration\ConfigurationManager;
+use TYPO3\CMS\Extbase\Mvc\Web\Request;
+use TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder;
+use TYPO3\CMS\Extbase\Object\ObjectManager;
+use TYPO3\CMS\Extbase\Persistence\Generic\PersistenceManager;
 
-/**
- * Payment Utility
- *
- * @author Daniel Lorenz <ext.cart@extco.de>
- */
 class PaymentUtility
 {
+
     /**
-     * Object Manager
-     *
-     * @var \TYPO3\CMS\Extbase\Object\ObjectManager
+     * @var ObjectManager
      */
     protected $objectManager;
 
     /**
-     * Persistence Manager
-     *
-     * @var \TYPO3\CMS\Extbase\Persistence\Generic\PersistenceManager
-     * @inject
+     * @var PersistenceManager
      */
     protected $persistenceManager;
 
     /**
-     * Configuration Manager
-     *
-     * @var \TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface
+     * @var ConfigurationManager
      */
     protected $configurationManager;
 
     /**
-     * Cart Repository
-     *
-     * @var \Extcode\Cart\Domain\Repository\CartRepository
+     * @var array
      */
-    protected $cartRepository;
+    protected $conf = [];
 
     /**
-     * Cart Settings
-     *
      * @var array
      */
     protected $cartConf = [];
 
     /**
-     * Cart mPay24 Settings
-     *
-     * @var array
-     */
-    protected $cartMpay24Conf = [];
-
-    /**
-     * Payment Query Url
-     *
-     * @var string
-     */
-    protected $paymentQueryUrl = '';
-
-    /**
-     * Payment Query
-     *
      * @var array
      */
     protected $paymentQuery = [];
 
     /**
-     * Order Item
-     *
      * @var \Extcode\Cart\Domain\Model\Order\Item
      */
     protected $orderItem = null;
-
-    /**
-     * Cart
-     *
-     * @var \Extcode\Cart\Domain\Model\Cart\Cart
-     */
-    protected $cart = null;
-
-    /**
-     * CartFHash
-     *
-     * @var string
-     */
-    protected $cartFHash = '';
 
     /**
      * Intitialize
      */
     public function __construct()
     {
-        $this->objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(
-            \TYPO3\CMS\Extbase\Object\ObjectManager::class
+        $this->objectManager = GeneralUtility::makeInstance(
+            ObjectManager::class
         );
-
+        $this->persistenceManager = $this->objectManager->get(
+            PersistenceManager::class
+        );
         $this->configurationManager = $this->objectManager->get(
-            \TYPO3\CMS\Extbase\Configuration\ConfigurationManager::class
+            ConfigurationManager::class
         );
 
-        $this->cartConf =
-            $this->configurationManager->getConfiguration(
-                \TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface::CONFIGURATION_TYPE_FRAMEWORK,
-                'Cart'
-            );
+        $this->conf = $this->configurationManager->getConfiguration(
+            \TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface::CONFIGURATION_TYPE_FRAMEWORK,
+            'CartMpay24'
+        );
 
-        $this->cartMpay24Conf =
-            $this->configurationManager->getConfiguration(
-                \TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface::CONFIGURATION_TYPE_FRAMEWORK,
-                'CartMpay24'
-            );
+        $this->cartConf = $this->configurationManager->getConfiguration(
+            \TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface::CONFIGURATION_TYPE_FRAMEWORK,
+            'Cart'
+        );
     }
 
     /**
-     * Handle Payment - Signal Slot Function
-     *
      * @param array $params
      *
      * @return array
      */
-    public function handlePayment($params)
+    public function handlePayment(array $params): array
     {
         $this->orderItem = $params['orderItem'];
 
-        if ($this->orderItem->getPayment()->getProvider() == 'MPAY24') {
-            $params['providerUsed'] = true;
+        list($provider, $type, $brand) = array_map('trim', explode('-', $this->orderItem->getPayment()->getProvider()));
 
-            $this->cart = $params['cart'];
+        if ($provider === 'MPAY24') {
+            $params['providerUsed'] = true;
 
             $cart = $this->objectManager->get(
                 \Extcode\Cart\Domain\Model\Cart::class
             );
             $cart->setOrderItem($this->orderItem);
-            $cart->setCart($this->cart);
+            $cart->setCart($params['cart']);
             $cart->setPid($this->cartConf['settings']['order']['pid']);
 
             $cartRepository = $this->objectManager->get(
-                \Extcode\Cart\Domain\Repository\CartRepository::class
+                CartRepository::class
             );
             $cartRepository->add($cart);
-
             $this->persistenceManager->persistAll();
 
-            $this->cartFHash = $cart->getFHash();
-
             $mpay24 = new Mpay24(
-                $this->cartMpay24Conf['merchantId'],
-                $this->cartMpay24Conf['soapPassword'],
-                $this->cartMpay24Conf['test'],
-                $this->cartMpay24Conf['enableDebug'],
+                $this->conf['merchantId'],
+                $this->conf['soapPassword'],
+                $this->conf['test'],
+                $this->conf['enableDebug'],
                 null,
                 null,
                 null,
                 null,
                 null,
-                $this->cartMpay24Conf['enableDebugCurl'],
+                $this->conf['enableDebugCurl'],
                 null,
                 null,
                 null,
                 'mpay24.log',
-                PATH_site . '/typo3temp/logs/',
+                \TYPO3\CMS\Core\Core\Environment::getVarPath() . '/log',
                 'mpay24_curl.log'
             );
-            $mpay24->setCurloptCainfoPath(ExtensionManagementUtility::extPath('cart_mpay24') . 'Libraries/');
 
             $mdxi = new Mpay24Order();
             $mdxi->Order->Tid = $this->orderItem->getOrderNumber();
+
+            if (!empty($type)) {
+                $mdxi->Order->PaymentTypes->setEnable('true');
+                $mdxi->Order->PaymentTypes->Payment(1)->setType($type);
+                if (!empty($brand)) {
+                    $mdxi->Order->PaymentTypes->Payment(1)->setBrand($brand);
+                }
+            }
             $mdxi->Order->Price = $this->orderItem->getTotalGross();
-            $mdxi->Order->URL->Success      = $this->getUrl('paymentSuccess', $cart->getSHash());
-            $mdxi->Order->URL->Error        = $this->getUrl('paymentCancel', $cart->getFHash());
-            $mdxi->Order->URL->Confirmation = 'https://cart.extdev.de/warenkorb/confirmation';
 
-            $paymentPageURL = $mpay24->paymentPage($mdxi)->getLocation(); // redirect location to the payment page
+            $mdxi->Order->URL->Success = $this->getUrl('success', $cart->getSHash());
+            $mdxi->Order->URL->Error = $this->getUrl('cancel', $cart->getFHash());
+            $mdxi->Order->URL->Confirmation = $this->getUrl('confirm', $cart->getSHash());
 
-            header('Location: '.$paymentPageURL);
+            $paymentPageURL = $mpay24->paymentPage($mdxi)->getLocation();
+
+            header('Location: ' . $paymentPageURL);
         }
 
         return [$params];
     }
 
     /**
+     * Builds a return URL to Cart order controller action
      *
+     * @param string $action
+     * @param string $hash
+     *
+     * @return string
      */
-    protected function getUrl($action, $hash)
+    protected function getUrl($action, $hash): string
     {
         $pid = $this->cartConf['settings']['cart']['pid'];
 
         $arguments = [
-            ['tx_cart_cart' =>
-                 [
-                     'controller' => 'Order',
-                     'order' => $this->orderItem->getUid(),
-                     'action' => $action,
-                     'hash' => $hash
-                 ]
+            'tx_cartmpay24_cart' => [
+                'controller' => 'Order\Payment',
+                'order' => $this->orderItem->getUid(),
+                'action' => $action,
+                'hash' => $hash
             ]
         ];
 
-        $request = $this->objectManager->get(\TYPO3\CMS\Extbase\Mvc\Web\Request::class);
-        $request->setRequestURI(\TYPO3\CMS\Core\Utility\GeneralUtility::getIndpEnv('TYPO3_REQUEST_URL'));
-        $request->setBaseURI(\TYPO3\CMS\Core\Utility\GeneralUtility::getIndpEnv('TYPO3_SITE_URL'));
-        $uriBuilder = $this->objectManager->get(\TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder::class);
-        $uriBuilder->setRequest($request);
+        $uriBuilder = $this->getUriBuilder();
 
-        $uri = $uriBuilder->reset()
+        return $uriBuilder->reset()
             ->setTargetPageUid($pid)
+            ->setTargetPageType($this->conf['redirectTypeNum'])
             ->setCreateAbsoluteUri(true)
+            ->setUseCacheHash(false)
             ->setArguments($arguments)
             ->build();
+    }
 
-        return $uri;
+    /**
+     * @return UriBuilder
+     */
+    protected function getUriBuilder(): UriBuilder
+    {
+        $request = $this->objectManager->get(Request::class);
+        $request->setRequestURI(GeneralUtility::getIndpEnv('TYPO3_REQUEST_URL'));
+        $request->setBaseURI(GeneralUtility::getIndpEnv('TYPO3_SITE_URL'));
+        $uriBuilder = $this->objectManager->get(UriBuilder::class);
+        $uriBuilder->setRequest($request);
+
+        return $uriBuilder;
     }
 }
