@@ -1,0 +1,3 @@
+plugin.tx_cartmpay24 {
+    redirectTypeNum = 2278103
+}
