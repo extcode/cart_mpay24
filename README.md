@@ -26,8 +26,8 @@ The extension require additional composer packages and will not available in the
 
 | Cart          | TYPO3      | PHP       | Support/Development                     |
 | ------------- | ---------- | ----------|---------------------------------------- |
-| 2.x.x         | 9.5        | 7.2       | Features, Bugfixes, Security Updates    |
-| 1.x.x         | 8.7        | 7.0 - 7.2 | Features _(in certain circumstances with feature toogle)_, Bugfixes, Security Updates    |
+| 2.x.x         | 9.5        | 7.2 - 7.4 | Features, Bugfixes, Security Updates    |
+| 1.x.x         | 8.7        | 7.0 - 7.4 | Bugfixes, Security Updates              |
 
 ### 3.2. Changelog
 

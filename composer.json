@@ -23,10 +23,10 @@
         "issues": "https://github.com/extcode/cart_mpay24/issues"
     },
     "require": {
-        "php": ">=7.0.0 <7.3",
+        "php": ">=7.0.0 <7.5",
         "typo3/cms-core": "^8.7",
         "typo3/cms-extbase": "^8.7",
-        "extcode/cart": "^5.3",
+        "extcode/cart": "^5.9",
         "mpay24/mpay24-php": "^4.3"
     },
     "require-dev": {
@@ -39,7 +39,6 @@
         }
     },
     "replace": {
-        "cart_mpay24": "self.version",
         "extcode/cart_mpay24": "self.version"
     },
     "config": {
